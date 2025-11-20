@@ -136,11 +136,17 @@
       try {
         // Fetch the data files
         log('📥 Loading case law data...', 'info');
-        const casesResponse = await fetch('data/case-law-complete.json');
+        const casesResponse = await fetch('/case-law-complete.json');
+        if (!casesResponse.ok) {
+          throw new Error(`Failed to load cases: ${casesResponse.status} ${casesResponse.statusText}`);
+        }
         const cases = await casesResponse.json();
 
         log('📥 Loading KRS codes data...', 'info');
-        const krsResponse = await fetch('data/krs-codes-complete.json');
+        const krsResponse = await fetch('/krs-codes-complete.json');
+        if (!krsResponse.ok) {
+          throw new Error(`Failed to load KRS codes: ${krsResponse.status} ${krsResponse.statusText}`);
+        }
         const krsCodes = await krsResponse.json();
 
         log(`✅ Loaded ${cases.length} cases and ${krsCodes.length} KRS codes`, 'success');
