@@ -5,8 +5,8 @@
 
 [build.environment]
   NODE_VERSION = "18"
-  # Ignore deleted files from secret scanning
-  SECRETS_SCAN_OMIT_PATHS = "data-uploader.html,test-connection.js"
+  # Supabase anon key is meant to be public - safe to expose in client code
+  SECRETS_SCAN_OMIT_KEYS = "supabase_anon_key"
 
 [[redirects]]
   from = "/*"
