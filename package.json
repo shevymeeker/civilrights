@@ -1,7 +1,7 @@
 {
-  "name": "kentucky-traffic-stop-simulator",
+  "name": "kentucky-legal-research-platform",
   "version": "1.0.0",
-  "description": "PWA for training on legal rights during traffic stops",
+  "description": "AI-powered Kentucky legal research platform with 178 cases, 280 KRS codes, and scenario analysis",
   "type": "module",
   "scripts": {
     "dev": "vite",
