@@ -5,6 +5,8 @@
 
 [build.environment]
   NODE_VERSION = "18"
+  # Ignore deleted files from secret scanning
+  SECRETS_SCAN_OMIT_PATHS = "data-uploader.html,test-connection.js"
 
 [[redirects]]
   from = "/*"
