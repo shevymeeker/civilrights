@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Kentucky Legal Database Uploader</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -25,7 +24,18 @@
     }
     .subtitle {
       color: #666;
+      margin-bottom: 20px;
+    }
+    .password-section {
       margin-bottom: 30px;
+    }
+    input[type="password"] {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 14px;
+      box-sizing: border-box;
     }
     button {
       background: #4CAF50;
@@ -74,6 +84,7 @@
       height: 30px;
       margin: 20px 0;
       overflow: hidden;
+      display: none;
     }
     .progress-bar {
       background: #4CAF50;
@@ -91,23 +102,23 @@
 <body>
   <div class="container">
     <h1>🏛️ Kentucky Legal Database Uploader</h1>
-    <p class="subtitle">This will upload 178 cases and 280 KRS codes to your Supabase database</p>
+    <p class="subtitle">This will securely upload 178 cases and 280 KRS codes to your database</p>
+
+    <div class="password-section">
+      <label for="adminPassword"><strong>Admin Password:</strong></label>
+      <input type="password" id="adminPassword" placeholder="Enter your ADMIN_SECRET password">
+    </div>
 
     <button id="uploadBtn" onclick="startUpload()">Start Upload</button>
 
-    <div class="progress" id="progressContainer" style="display: none;">
-      <div class="progress-bar" id="progressBar">0%</div>
+    <div class="progress" id="progressContainer">
+      <div class="progress-bar" id="progressBar">Loading...</div>
     </div>
 
     <div class="log" id="log"></div>
   </div>
 
   <script>
-    const SUPABASE_URL = 'https://tihxzsfgkukvwduhsbpa.supabase.co';
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpaHh6c2Zna3VrdndkdWhzYnBhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MzYxMTkzMCwiZXhwIjoyMDc5MTg3OTMwfQ.OMgFA7gKG-d7678OJwryT_O3A6m0EuP13YlJWcTz7ps';
-
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
     function log(message, type = 'info') {
       const logDiv = document.getElementById('log');
       const entry = document.createElement('div');
@@ -117,16 +128,15 @@
       logDiv.scrollTop = logDiv.scrollHeight;
     }
 
-    function updateProgress(current, total) {
-      const percent = Math.round((current / total) * 100);
-      const progressBar = document.getElementById('progressBar');
-      progressBar.style.width = percent + '%';
-      progressBar.textContent = percent + '%';
-    }
-
     async function startUpload() {
       const btn = document.getElementById('uploadBtn');
       const progressContainer = document.getElementById('progressContainer');
+      const password = document.getElementById('adminPassword').value;
+
+      if (!password) {
+        log('❌ Please enter the admin password', 'error');
+        return;
+      }
 
       btn.disabled = true;
       progressContainer.style.display = 'block';
@@ -138,122 +148,52 @@
         log('📥 Loading case law data...', 'info');
         const casesResponse = await fetch('/case-law-complete.json');
         if (!casesResponse.ok) {
-          throw new Error(`Failed to load cases: ${casesResponse.status} ${casesResponse.statusText}`);
+          throw new Error(`Failed to load cases: ${casesResponse.status}`);
         }
         const cases = await casesResponse.json();
 
         log('📥 Loading KRS codes data...', 'info');
         const krsResponse = await fetch('/krs-codes-complete.json');
         if (!krsResponse.ok) {
-          throw new Error(`Failed to load KRS codes: ${krsResponse.status} ${krsResponse.statusText}`);
+          throw new Error(`Failed to load KRS codes: ${krsResponse.status}`);
         }
         const krsCodes = await krsResponse.json();
 
         log(`✅ Loaded ${cases.length} cases and ${krsCodes.length} KRS codes`, 'success');
 
-        // Upload cases
-        log('📤 Uploading case law...', 'info');
-        let successCases = 0;
-        let failedCases = 0;
+        // Upload via Netlify function
+        log('📤 Uploading to database (this may take 5-10 minutes)...', 'info');
 
-        for (let i = 0; i < cases.length; i++) {
-          const c = cases[i];
+        const uploadResponse = await fetch('/.netlify/functions/bulk-upload', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${password}`
+          },
+          body: JSON.stringify({ cases, krsCodes })
+        });
 
-          const caseData = {
-            case_name: c.case_name || null,
-            citation: c.citation || null,
-            full_title: c.full_title || c.case_name || 'Untitled',
-            year: c.year || null,
-            court: c.court || null,
-            facts: c.facts || null,
-            issue: c.issue || null,
-            holding: c.holding || null,
-            discussion: c.discussion || null,
-            full_text: c.full_text || null,
-            category: c.category || null,
-            tags: c.tags || [],
-            related_krs: c.related_krs || [],
-            importance: c.importance || 3,
-            created_by: 'web-uploader'
-          };
-
-          const { error } = await supabase
-            .from('case_law')
-            .insert([caseData]);
-
-          if (error) {
-            log(`❌ Failed: ${c.case_name || c.full_title}`, 'error');
-            console.error(error);
-            failedCases++;
-          } else {
-            successCases++;
-          }
-
-          updateProgress(i + 1, cases.length + krsCodes.length);
-
-          // Log progress every 20 cases
-          if ((i + 1) % 20 === 0) {
-            log(`   Progress: ${i + 1}/${cases.length} cases`, 'info');
-          }
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json();
+          throw new Error(errorData.error || `Upload failed: ${uploadResponse.status}`);
         }
 
-        log(`✅ Cases: ${successCases} succeeded, ${failedCases} failed`, successCases > 0 ? 'success' : 'error');
+        const result = await uploadResponse.json();
 
-        // Upload KRS codes
-        log('📤 Uploading KRS codes...', 'info');
-        let successKRS = 0;
-        let failedKRS = 0;
-
-        for (let i = 0; i < krsCodes.length; i++) {
-          const k = krsCodes[i];
-
-          const krsData = {
-            code: k.code || 'Unknown',
-            title: k.title || 'Untitled',
-            chapter: k.chapter || null,
-            full_text: k.full_text || '',
-            summary: k.summary || null,
-            category: k.category || [],
-            tags: k.tags || [],
-            related_krs: k.related_krs || [],
-            effective_date: k.effective_date || null,
-            created_by: 'web-uploader'
-          };
-
-          const { error } = await supabase
-            .from('krs_codes')
-            .insert([krsData]);
-
-          if (error) {
-            log(`❌ Failed: KRS ${k.code}`, 'error');
-            console.error(error);
-            failedKRS++;
-          } else {
-            successKRS++;
-          }
-
-          updateProgress(cases.length + i + 1, cases.length + krsCodes.length);
-
-          // Log progress every 30 KRS codes
-          if ((i + 1) % 30 === 0) {
-            log(`   Progress: ${i + 1}/${krsCodes.length} KRS codes`, 'info');
-          }
-        }
-
-        log(`✅ KRS Codes: ${successKRS} succeeded, ${failedKRS} failed`, successKRS > 0 ? 'success' : 'error');
-
-        // Final summary
         log('', 'info');
         log('═══════════════════════════════════', 'info');
         log('🎉 UPLOAD COMPLETE!', 'success');
-        log(`   Cases: ${successCases}/${cases.length}`, 'success');
-        log(`   KRS Codes: ${successKRS}/${krsCodes.length}`, 'success');
-        log(`   Total: ${successCases + successKRS} entries uploaded`, 'success');
+        log(`   Cases: ${result.cases.success}/${result.cases.total} successful`, 'success');
+        log(`   KRS Codes: ${result.krs.success}/${result.krs.total} successful`, 'success');
+        log(`   Total: ${result.cases.success + result.krs.success} entries uploaded`, 'success');
         log('═══════════════════════════════════', 'info');
 
-        if (failedCases + failedKRS > 0) {
-          log(`⚠️  ${failedCases + failedKRS} entries failed - check console for errors`, 'error');
+        if (result.cases.failed > 0 || result.krs.failed > 0) {
+          log(`⚠️  ${result.cases.failed + result.krs.failed} entries failed`, 'error');
         }
+
+        document.getElementById('progressBar').style.width = '100%';
+        document.getElementById('progressBar').textContent = 'Complete!';
 
       } catch (error) {
         log(`❌ Upload failed: ${error.message}`, 'error');
@@ -264,7 +204,8 @@
       }
     }
 
-    log('Ready to upload! Click the button above to start.', 'info');
+    log('✅ Ready! Enter your admin password and click Start Upload.', 'info');
+    log('ℹ️  This is the ADMIN_SECRET password you set in Netlify.', 'info');
   </script>
 </body>
 </html>
