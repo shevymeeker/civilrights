@@ -1,10 +1,10 @@
-import TrafficStopSimulator from './TrafficStopSimulator';
+import HomePage from './HomePage';
 import PWUpdatePrompt from './PWUpdatePrompt';
 
 function App() {
   return (
     <>
-      <TrafficStopSimulator />
+      <HomePage />
       <PWUpdatePrompt />
     </>
   );
