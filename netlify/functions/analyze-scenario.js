@@ -103,6 +103,14 @@ export async function handler(event, context) {
       console.error('KRS search error:', krsError);
     }
 
+    // Search federal statutes
+    const { data: federalData, error: federalError } = await supabase
+      .rpc('search_federal_statutes', { search_query: searchQuery, limit_count: 10 });
+
+    if (federalError) {
+      console.error('Federal search error:', federalError);
+    }
+
     // Build context for Claude
     const caseLawContext = cases?.slice(0, 10).map(c =>
       `Case: ${c.case_name || 'Untitled'} (${c.citation || 'N/A'})\nHolding: ${c.holding || 'N/A'}`
@@ -111,6 +119,10 @@ export async function handler(event, context) {
     const krsContext = krsData?.slice(0, 5).map(k =>
       `KRS ${k.code}: ${k.title}\n${k.summary || ''}`
     ).join('\n\n') || 'No relevant KRS codes found';
+
+    const federalContext = federalData?.slice(0, 5).map(f =>
+      `${f.code}: ${f.heading}\n${f.summary || ''}`
+    ).join('\n\n') || 'No relevant federal statutes found';
 
     // Call Claude API
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
@@ -125,7 +137,7 @@ export async function handler(event, context) {
         max_tokens: 2000,
         messages: [{
           role: 'user',
-          content: `You are a Kentucky legal rights assistant. Analyze this traffic stop or police encounter scenario and provide guidance based on the case law and KRS codes provided.
+          content: `You are a Kentucky legal rights assistant. Analyze this legal scenario and provide guidance based on the case law, KRS codes, and federal statutes provided.
 
 SCENARIO:
 ${scenario}
@@ -136,14 +148,18 @@ ${caseLawContext}
 RELEVANT KRS CODES:
 ${krsContext}
 
+RELEVANT FEDERAL STATUTES:
+${federalContext}
+
 Provide a structured response with:
 1. **Your Rights in This Situation** - What constitutional/legal rights apply
 2. **Relevant Case Law** - Which cases from above are most applicable and why
-3. **Relevant KRS Codes** - Which Kentucky statutes apply
-4. **Recommended Response** - What to say/do (include the "three sentences" if applicable)
-5. **Legal Reasoning** - Why these rights and cases apply
+3. **Relevant Kentucky Statutes (KRS)** - Which Kentucky statutes apply
+4. **Relevant Federal Statutes (USC)** - Which federal statutes apply (if any)
+5. **Recommended Response** - What to say/do (emphasize compliance with lawful orders)
+6. **Legal Reasoning** - Why these rights, cases, and statutes apply
 
-Be specific, practical, and cite the actual cases and statutes provided above. If the scenario involves a search, seizure, or detention, emphasize 4th Amendment protections.`
+Be specific, practical, and cite the actual cases and statutes provided above. If the scenario involves civil rights violations, mention both criminal (18 USC 242) and civil (42 USC 1983) remedies.`
         }]
       })
     });
@@ -157,10 +173,16 @@ Be specific, practical, and cite the actual cases and statutes provided above. I
     const claudeData = await claudeResponse.json();
     const analysis = claudeData.content[0].text;
 
+    // Extract matched codes for tracking
+    const matchedKRS = krsData?.map(k => k.code) || [];
+    const matchedUSC = federalData?.map(f => f.code) || [];
+
     // Log this search for analytics (without PII)
     await supabase.from('scenarios').insert([{
       scenario_text: scenario.substring(0, 500), // Limit length
       ai_response: { analysis },
+      matched_krs: matchedKRS,
+      matched_usc: matchedUSC,
       ip_address: clientIP.split(',')[0], // First IP only
       user_agent: event.headers['user-agent']
     }]);
@@ -171,7 +193,8 @@ Be specific, practical, and cite the actual cases and statutes provided above. I
       body: JSON.stringify({
         analysis,
         relatedCases: cases?.slice(0, 5) || [],
-        relatedKRS: krsData?.slice(0, 3) || []
+        relatedKRS: krsData?.slice(0, 3) || [],
+        relatedFederal: federalData?.slice(0, 3) || []
       })
     };
 
