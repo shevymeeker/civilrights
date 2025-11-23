@@ -5,11 +5,14 @@
 
 [build.environment]
   NODE_VERSION = "18"
+  # Supabase anon key is meant to be public - safe to expose in client code
+  SECRETS_SCAN_OMIT_KEYS = "supabase_anon_key"
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+  force = false
 
 [functions]
   node_bundler = "esbuild"
